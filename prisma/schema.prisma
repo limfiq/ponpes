@@ -1,0 +1,120 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN_YAYASAN
+  ADMIN_UNIT
+  TEACHER
+  PARENT
+}
+
+enum UnitType {
+  RELIGION // Tahfidz, Madrasah Diniyah
+  GENERAL  // SMP, SMA, SMK
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String   // Hashed via bcrypt
+  role      Role     @default(PARENT)
+  
+  // Scoped to a specific unit, or null for Admin Yayasan
+  unitId    String?  
+  unit      Unit?    @relation(fields: [unitId], references: [id])
+  
+  // If role is PARENT, map to their children
+  students  Student[] 
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Unit {
+  id        String   @id @default(cuid())
+  name      String   // e.g., "Madrasah Diniyah", "SMP"
+  type      UnitType
+  
+  users     User[]   // Staff/Admin/Teachers mapping
+  students  Student[] // Students enrolled here
+  classes   Class[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Student {
+  id        String   @id @default(cuid())
+  nisn      String   @unique // National/Internal Student Number
+  name      String
+  
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id])
+  
+  parentId  String?
+  parent    User?    @relation(fields: [parentId], references: [id])
+  
+  enrollments ClassEnrollment[]
+  attendances Attendance[]
+  payments    Payment[]
+  
+  status    String   @default("ACTIVE") // ACTIVE, GRADUATED, DROPOUT
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Class {
+  id        String   @id @default(cuid())
+  name      String   // e.g., "7A", "10B", "Tahfidz Ula"
+  
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id])
+  
+  enrollments ClassEnrollment[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ClassEnrollment {
+  id           String   @id @default(cuid())
+  studentId    String
+  classId      String
+  academicYear String   // e.g., "2023/2024"
+  
+  student      Student  @relation(fields: [studentId], references: [id])
+  class        Class    @relation(fields: [classId], references: [id])
+  
+  @@unique([studentId, classId, academicYear])
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  studentId String
+  date      DateTime
+  status    String   // PRESENT, ABSENT, SICK, EXCUSED
+  notes     String?  // Text area for "Setoran Hafalan" notes
+  
+  student   Student  @relation(fields: [studentId], references: [id])
+  
+  @@unique([studentId, date])
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  studentId String
+  amount    Float
+  month     Int
+  year      Int
+  type      String   // SPP, SYAHRIAH, BUILD_FUND
+  status    String   // PAID, UNPAID, PARTIAL
+  
+  student   Student  @relation(fields: [studentId], references: [id])
+}
